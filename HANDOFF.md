@@ -199,7 +199,7 @@ v1.2.0 שמחייבות את v1.2.1 ישירות — מספרי כותרת בר�
 
 ## איך סוגרים שיחה
 
-**בסיום כל צעד:** `python tools/context_check.py`. הוא מכריע אם ממשיכים כאן
+**בסיום כל צעד:** `python C:/Users/Shalom/.claude/tools/context_check.py`. הוא מכריע אם ממשיכים כאן
 (🟢) או סוגרים (🟡/🔴) — **לא שואלים את המשתתף.**
 
 1. `docs/qa/<גרסה>.md` מעודכן (Definition of done ב-`CLAUDE.md`).
