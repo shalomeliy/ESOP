@@ -88,6 +88,14 @@ def create_grant(payload: CreateGrantRequest,
     employee = db.query(Employee).filter(Employee.employee_id == payload.employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
+    # IDOR (v1.2.1 - patch אבטחה): הבדיקה למטה על pool.company_id לא הגנה על
+    # employee_id זר - אדמין מחברה א' יכול היה להעניק לעובד מחברה ב' כל עוד
+    # ה-pool שלו. התוצאה: Grant תקין ב-scope של חברה א' (דרך pool_id) שמצביע
+    # על עובד שלא שייך לה, ודליפת ה-PII שלו (שם, תאריך לידה) דרך כל endpoint
+    # שמצרף Grant ל-Employee. אותו דפוס בדיוק כמו P2 ב-QA_TESTBOOK.md, רק
+    # בכתיבה ולא בקריאה.
+    if employee.company_id != current_user.company_id:
+        raise HTTPException(status_code=403, detail="Cannot grant to an employee outside your company")
 
     # בדיקת גיל במועד ההענקה. חסרה לגמרי קודם - אפשר היה להעניק אופציות לקטין.
     # birth_date חסר נחסם גם הוא: "לא בדקנו" אינו "עבר את הבדיקה".
@@ -115,6 +123,9 @@ def create_grant(payload: CreateGrantRequest,
         trustee = db.query(Trustee).filter(Trustee.trustee_id == payload.trustee_id).first()
         if not trustee:
             raise HTTPException(status_code=404, detail="Trustee not found")
+        # אותו חוסר בדיוק כמו employee למעלה, על אותו endpoint.
+        if trustee.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Cannot use a trustee outside your company")
 
     if payload.total_options <= 0:
         raise HTTPException(status_code=400, detail="total_options must be positive")

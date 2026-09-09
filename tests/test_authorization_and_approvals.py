@@ -72,8 +72,13 @@ def world(db_session):
         OptionPool(pool_id="POOL-B", company_id="COMP-B", total_shares=50000.0,
                    allocated_shares=0.0, unallocated_shares=50000.0),
     ])
-    db.add(Trustee(trustee_id="TRUST-1", company_id="COMP-A", name="Trustee Ltd",
-                   registration_number="123456"))
+    db.add_all([
+        Trustee(trustee_id="TRUST-1", company_id="COMP-A", name="Trustee Ltd",
+                registration_number="123456"),
+        # לבדיקת IDOR חוצה-חברות על יצירת מענק (באג #IDOR-GRANT)
+        Trustee(trustee_id="TRUST-2", company_id="COMP-B", name="Beta Trustee Ltd",
+                registration_number="654321"),
+    ])
     db.add_all([
         Employee(employee_id="EMP-A1", company_id="COMP-A", first_name="Yossi",
                  last_name="Cohen", email="a1@alpha.example", country_code="IL",
@@ -339,6 +344,39 @@ def test_grant_without_known_birth_date_is_rejected(client, world):
 
     assert response.status_code == 400
     assert "birth_date" in response.json()["detail"]
+
+
+
+# ===================================================================
+# באג IDOR-GRANT - יצירת מענק חוצה-חברות (v1.2.1)
+#
+# הבדיקה הקיימת על pool.company_id (שורה 111-112 ב-grants.py) לא הגנה על
+# employee_id/trustee_id זרים: אדמין מחברה א' יכול היה להעניק אופציות לעובד
+# מחברה ב', כל עוד ה-pool שלו. אותו דפוס בדיוק כמו P2 (QA_TESTBOOK.md), רק
+# בכתיבה: לא "מי מותר לו לראות רשומה", אלא "לאיזו רשומה זרה מותר לו לצרף
+# משאב משלו".
+# ===================================================================
+
+def test_admin_cannot_grant_to_employee_outside_their_company(client, world):
+    response = client.post(f"{API}/admin/grants", headers=world.admin_a, json={
+        "employee_id": "EMP-B1", "pool_id": "POOL-A",
+        "grant_type": "IL_102_CAPITAL_GAINS", "total_options": 100.0,
+        "exercise_price": 1.0, "grant_date": str(TODAY),
+    })
+
+    assert response.status_code == 403
+    assert "outside your company" in response.json()["detail"]
+
+
+def test_admin_cannot_grant_using_trustee_outside_their_company(client, world):
+    response = client.post(f"{API}/admin/grants", headers=world.admin_a, json={
+        "employee_id": "EMP-A1", "pool_id": "POOL-A", "trustee_id": "TRUST-2",
+        "grant_type": "IL_102_CAPITAL_GAINS", "total_options": 100.0,
+        "exercise_price": 1.0, "grant_date": str(TODAY),
+    })
+
+    assert response.status_code == 403
+    assert "outside your company" in response.json()["detail"]
 
 
 def test_grant_to_an_adult_still_succeeds(client, world):
